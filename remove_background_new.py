@@ -1,10 +1,36 @@
 import os
 import threading
-from tkinter import Tk, Label, Button, filedialog, Canvas, NW, ttk, StringVar, Frame, TclError
+from tkinter import Tk, Label, Button, filedialog, Canvas, NW, ttk, StringVar, Frame, TclError, messagebox, Menu
 from tkinter.messagebox import showinfo, showerror
 from PIL import Image, ImageTk
 from rembg import remove
 import customtkinter as ctk
+import requests
+import tempfile
+import sys
+import subprocess
+from pathlib import Path
+import time
+import traceback
+
+# Constants for version checking
+CURRENT_VERSION = "1.0.0"  # Update this with your current version
+GITHUB_API_URL = "https://api.github.com/repos/needyamin/img-background-remover/releases/latest"
+REPO_OWNER = "needyamin"
+REPO_NAME = "img-background-remover"
+
+def log(message):
+    """Simple logging function"""
+    print(f"[LOG] {message}")
+
+def compare_versions(version1, version2):
+    """Compare two version strings. Returns True if version1 > version2"""
+    def normalize(v):
+        return [int(x) for x in v.split(".")]
+    try:
+        return normalize(version1) > normalize(version2)
+    except (AttributeError, TypeError, ValueError):
+        return False
 
 class BackgroundRemoverApp:
     def __init__(self, master):
@@ -12,6 +38,9 @@ class BackgroundRemoverApp:
         self.master.title("Advanced Background Remover Pro")
         self.master.geometry("1200x800")
         self.master.configure(bg='#2B2B2B')
+
+        # Create Menu Bar
+        self.create_menu_bar()
 
         # Set up icon for window and taskbar
         try:
@@ -128,8 +157,7 @@ class BackgroundRemoverApp:
             height=35,
             fg_color="#21ba45",
             hover_color="#16ab39",
-            state='disabled'
-        )
+            state='disabled'        )
         self.save_button.pack(side='left', padx=5)
 
         # Progress bar
@@ -266,6 +294,52 @@ class BackgroundRemoverApp:
         import webbrowser
         webbrowser.open(url)
 
+    def create_menu_bar(self):
+        """Create the main menu bar"""
+        menubar = Menu(self.master)
+        self.master.config(menu=menubar)
+
+        # File Menu
+        file_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Open Image", command=self.upload_image, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save Image", command=self.save_processed_image, accelerator="Ctrl+S")
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.master.quit)
+
+        # Edit Menu
+        edit_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Clear Images", command=self.clear_images)
+
+        # Help Menu
+        help_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="Check for Updates", command=self.check_for_updates)
+        help_menu.add_separator()
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def clear_images(self):
+        """Clear both canvases"""
+        self.original_canvas.delete("all")
+        self.removed_canvas.delete("all")
+        self.current_image = None
+        self.processed_image = None
+        self.save_button.configure(state='disabled')
+        self.status_var.set("Ready to process images...")
+
+    def show_about(self):
+        """Show about dialog"""
+        about_text = f"""Advanced Background Remover Pro v{CURRENT_VERSION}
+
+Created by Md. Yamin Hossain
+
+This application helps you remove backgrounds from images 
+using advanced AI technology.
+
+© 2025 All rights reserved."""
+        messagebox.showinfo("About", about_text)
+
     def upload_image(self, event=None):
         file_path = filedialog.askopenfilename(
             filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
@@ -373,6 +447,148 @@ class BackgroundRemoverApp:
             except Exception as e:
                 print(f"Could not create ICO file: {e}")
         return ico_path
+
+    def check_for_updates(self):
+        """Check for updates on GitHub and return the latest version if available."""
+        try:
+            log("=== Starting Update Check ===")
+            self.status_var.set("Checking for updates...")
+            
+            # Make the request with headers to avoid rate limiting
+            headers = {
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': f'background-remover/{CURRENT_VERSION}'
+            }
+            
+            response = requests.get(GITHUB_API_URL, headers=headers, timeout=10)
+            log(f"GitHub API Response Status: {response.status_code}")
+            
+            if response.status_code != 200:
+                log(f"GitHub API Error: {response.text}")
+                self.status_var.set("Failed to check for updates")
+                return None
+                
+            latest_release = response.json()
+            
+            # Check if there's a valid release
+            if 'tag_name' not in latest_release:
+                log("No tag_name found in release")
+                self.status_var.set("No updates found")
+                return None
+                
+            # Get the latest version number (strip v prefix if present)
+            latest_version = latest_release.get('tag_name', '').lstrip('v')
+            log(f"Latest version on GitHub: {latest_version}")
+            
+            if not latest_version:
+                log("Empty version tag found in release")
+                self.status_var.set("No valid update found")
+                return None
+            
+            if compare_versions(latest_version, CURRENT_VERSION):
+                log(f"New version {latest_version} is available!")
+                self.status_var.set(f"New version {latest_version} available!")
+                if messagebox.askyesno("Update Available", 
+                                     f"Version {latest_version} is available. Would you like to update now?"):
+                    self.download_and_install_update(latest_release)
+            else:
+                log("You have the latest version")
+                self.status_var.set("You have the latest version")
+                messagebox.showinfo("No Updates", "You have the latest version installed!")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            log(f"Network error checking for updates: {e}")
+            self.status_var.set("Network error checking for updates")
+            messagebox.showerror("Update Error", f"Network error checking for updates: {e}")
+            return None
+        except Exception as e:
+            log(f"Unexpected error checking for updates: {e}")
+            self.status_var.set("Error checking for updates")
+            messagebox.showerror("Update Error", f"Error checking for updates: {e}")
+            return None
+
+    def download_and_install_update(self, release):
+        """Download and install the latest release."""
+        try:
+            self.status_var.set("Downloading update...")
+            latest_version = release.get('tag_name', '').lstrip('v')
+            
+            # Find the asset with .exe extension
+            assets = release.get('assets', [])
+            exe_asset = None
+            for asset in assets:
+                if asset.get('name', '').lower().endswith('.exe'):
+                    exe_asset = asset
+                    break
+                    
+            if not exe_asset:
+                raise Exception("No executable found in release assets")
+            
+            # Create temporary directory for download
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                exe_path = temp_path / exe_asset['name']
+                
+                # Download the new version
+                download_url = exe_asset['browser_download_url']
+                log(f"Downloading from: {download_url}")
+                
+                # Show a message to inform the user that download is in progress
+                self.status_var.set(f"Downloading version {latest_version}...")
+                
+                # Download with progress tracking
+                response = requests.get(download_url, stream=True)
+                response.raise_for_status()
+                
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
+                
+                with open(exe_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        downloaded += len(chunk)
+                        f.write(chunk)
+                
+                self.status_var.set("Installing update...")
+                
+                # Create update script
+                update_script = temp_path / "update.bat"
+                current_exe = sys.executable
+                
+                with open(update_script, 'w') as f:
+                    f.write(f"""@echo off
+echo Waiting for application to close...
+timeout /t 2 /nobreak
+echo Updating Background Remover...
+del "{current_exe}"
+if exist "{current_exe}" (
+    echo Retrying with force delete...
+    taskkill /f /im "{os.path.basename(current_exe)}" 2>nul
+    timeout /t 1 /nobreak
+    del /f "{current_exe}"
+)
+echo Copying new version...
+copy "{exe_path}" "{current_exe}"
+if exist "{current_exe}" (
+    echo Starting new version...
+    start "" "{current_exe}"
+) else (
+    echo ERROR: Failed to copy new version.
+    pause
+)
+""")
+                
+                # Run update script and exit
+                subprocess.Popen([str(update_script)], shell=True)
+                time.sleep(1)
+                sys.exit(0)
+                
+        except Exception as e:
+            error_msg = str(e)
+            log(f"Error installing update: {error_msg}")
+            self.status_var.set("Update failed")
+            messagebox.showerror("Update Error", f"Failed to install update: {error_msg}")
+            return False
 
 if __name__ == "__main__":
     root = Tk()
