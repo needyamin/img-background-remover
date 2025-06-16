@@ -1,9 +1,35 @@
-import PyInstaller.__main__
 import os
 import sys
 import shutil
-import customtkinter
+import subprocess
+import time
 from pathlib import Path
+
+def ensure_pyinstaller():
+    """Ensure PyInstaller is properly installed"""
+    try:
+        import PyInstaller
+        print("PyInstaller is already installed")
+    except ImportError:
+        print("PyInstaller not found. Installing...")
+        try:
+            # Remove any leftover .deleteme files first
+            scripts_dir = os.path.join(sys.prefix, 'Scripts')
+            for file in os.listdir(scripts_dir):
+                if file.endswith('.deleteme'):
+                    try:
+                        os.remove(os.path.join(scripts_dir, file))
+                        print(f"Removed leftover file: {file}")
+                    except Exception as e:
+                        print(f"Warning: Could not remove {file}: {e}")
+            
+            # Install PyInstaller
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "pyinstaller"])
+            time.sleep(2)  # Give some time for file operations to complete
+            print("PyInstaller installed successfully")
+        except Exception as e:
+            print(f"Error installing PyInstaller: {e}")
+            sys.exit(1)
 
 def build_exe():
     """Build the executable using PyInstaller"""
@@ -89,5 +115,36 @@ def build_exe():
         print(f"\nError during build process: {str(e)}")
         sys.exit(1)
 
+def install_dependencies():
+    """Install required dependencies"""
+    print("Checking and installing dependencies...")
+    dependencies = ['customtkinter']
+    for dep in dependencies:
+        try:
+            __import__(dep)
+            print(f"{dep} is already installed")
+        except ImportError:
+            print(f"Installing {dep}...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", dep])
+            print(f"{dep} installed successfully")
+
 if __name__ == '__main__':
-    build_exe()
+    try:
+        # Ensure all dependencies are installed
+        install_dependencies()
+        
+        # Ensure PyInstaller is properly installed
+        ensure_pyinstaller()
+        
+        # Import PyInstaller after ensuring it's installed
+        import PyInstaller.__main__
+        import customtkinter
+        
+        # Run the build process
+        build_exe()
+    except KeyboardInterrupt:
+        print("\nBuild process interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nUnexpected error: {e}")
+        sys.exit(1)
