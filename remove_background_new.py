@@ -12,6 +12,76 @@ class BackgroundRemoverApp:
         self.master.title("Advanced Background Remover Pro")
         self.master.geometry("1200x800")
         self.master.configure(bg='#2B2B2B')
+
+        # Set up icon for window and taskbar
+        try:
+            if os.name == 'nt':
+                # Set app ID for Windows taskbar
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('mycompany.backgroundremover.1.0')
+            
+            # Set icon using both methods for maximum compatibility
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bg_icon.ico")
+            if os.path.exists(icon_path):
+                self.master.iconbitmap(icon_path)
+                self.master.wm_iconbitmap(icon_path)
+        except Exception as e:
+            print(f"Could not set icon: {e}")
+        # Set Windows App ID for taskbar and icon
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bg_icon.ico")
+            if os.name == 'nt':
+                # Set Windows-specific app ID
+                import ctypes
+                myappid = 'mycompany.backgroundremover.1.0'
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+            
+            # Set the icon if it exists
+            if os.path.exists(icon_path):
+                self.master.iconbitmap(icon_path)
+        except Exception as e:
+            print(f"Could not set icon: {e}")
+            png_path = os.path.join(base_path, "assets", "bg_icon.png")
+
+            if os.path.exists(png_path):
+                # First set the window icon using PNG
+                icon = ImageTk.PhotoImage(file=png_path)
+                self.master.iconphoto(True, icon)
+                self._icon = icon  # Keep reference
+
+                # Ensure ICO exists for taskbar
+                if not os.path.exists(ico_path):
+                    img = Image.open(png_path)
+                    if img.mode != 'RGBA':
+                        img = img.convert('RGBA')
+                    # Save multiple sizes for better quality
+                    img.save(ico_path, format='ICO', sizes=[(16,16), (32,32), (48,48), (64,64)])
+
+                # Set taskbar icon using ICO
+                if os.path.exists(ico_path):
+                    # Try multiple methods to set the taskbar icon
+                    try:
+                        self.master.iconbitmap(default=ico_path)
+                    except:
+                        try:
+                            self.master.wm_iconbitmap(ico_path)
+                        except:
+                            self.master.iconbitmap(ico_path)
+                    
+                    # Force taskbar refresh
+                    self.master.after(100, lambda: [
+                        self.master.state('iconic'),
+                        self.master.after(100, lambda: self.master.state('normal'))
+                    ])
+                self._icon = icon  # Keep reference
+                
+                # Additional Windows-specific handling
+                if os.name == 'nt':
+                    self.master.after(10, lambda: self.master.state('zoomed') and self.master.state('normal'))
+            else:
+                print("Icon files not found in assets directory")
+        except Exception as e:
+            print(f"Could not load application icon: {e}")
         
         # Add keyboard shortcuts
         self.master.bind('<Control-o>', lambda e: self.upload_image())
@@ -172,7 +242,19 @@ class BackgroundRemoverApp:
             foreground='#2185d0'
         )
         self.github_link.pack(side='left', pady=2)
-        self.github_link.bind("<Button-1>", lambda e: self.open_link("https://github.com/needyamin/img-background-remover"))
+        self.github_link.bind("<Button-1>", lambda e: self.open_link("https://github.com/needyamin/img-background-remover"))        # Set application icon
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "bg_icon.png")
+            if os.path.exists(icon_path):
+                # Create PhotoImage for general window icon
+                icon_image = ImageTk.PhotoImage(file=icon_path)
+                self.master.iconphoto(True, icon_image)
+                
+                # For Windows taskbar icon
+                if os.name == 'nt':  # Windows systems
+                    ico_path = self.create_ico_from_png(icon_path)
+                    self.master.iconbitmap(default=ico_path)
+        except Exception as e:            print(f"Could not load application icon: {e}")
 
     # Add method to open URLs
     def open_url(self, url):
@@ -274,6 +356,23 @@ class BackgroundRemoverApp:
         
         canvas.image = tk_image  # Keep a reference
         canvas.create_image(x_offset, y_offset, anchor=NW, image=tk_image)
+
+    def create_ico_from_png(self, png_path):
+        """Create an ICO file from a PNG file if it doesn't exist"""
+        ico_path = png_path.replace('.png', '.ico')
+        if not os.path.exists(ico_path):
+            try:
+                # Open PNG and convert to RGBA if necessary
+                img = Image.open(png_path)
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # Create ICO file with multiple sizes
+                icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64)]
+                img.save(ico_path, format='ICO', sizes=icon_sizes)
+            except Exception as e:
+                print(f"Could not create ICO file: {e}")
+        return ico_path
 
 if __name__ == "__main__":
     root = Tk()
