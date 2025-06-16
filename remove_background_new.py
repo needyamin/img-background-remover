@@ -124,7 +124,65 @@ class BackgroundRemoverApp:
             highlightthickness=1,
             highlightbackground="#333333"
         )
-        self.removed_canvas.pack(pady=5)
+        self.removed_canvas.pack(pady=5)        # Add footer frame
+        self.footer_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
+        self.footer_frame.pack(fill='x', pady=(10, 0))
+
+        # Center container frame
+        self.center_frame = ttk.Frame(self.footer_frame, style='Custom.TFrame')
+        self.center_frame.pack(expand=True, anchor='center')
+
+        # Credit text before name
+        self.credit_prefix = ttk.Label(
+            self.center_frame,
+            text="Created by ",
+            style='Custom.TLabel',
+            font=('Helvetica', 10)
+        )
+        self.credit_prefix.pack(side='left', pady=2)
+
+        # Name with hyperlink
+        self.name_link = ttk.Label(
+            self.center_frame,
+            text="Md. Yamin Hossain",
+            style='Custom.TLabel',
+            font=('Helvetica', 10, 'underline'),
+            cursor="hand2",
+            foreground='#2185d0'
+        )
+        self.name_link.pack(side='left', pady=2)
+        self.name_link.bind("<Button-1>", lambda e: self.open_link("https://needyamin.github.io"))
+
+        # Separator
+        self.separator = ttk.Label(
+            self.center_frame,
+            text=" | ",
+            style='Custom.TLabel',
+            font=('Helvetica', 10)
+        )
+        self.separator.pack(side='left', pady=2)
+
+        # Github link
+        self.github_link = ttk.Label(
+            self.center_frame,
+            text="Github",
+            style='Custom.TLabel',
+            font=('Helvetica', 10, 'underline'),
+            cursor="hand2",
+            foreground='#2185d0'
+        )
+        self.github_link.pack(side='left', pady=2)
+        self.github_link.bind("<Button-1>", lambda e: self.open_link("https://github.com/needyamin/img-background-remover"))
+
+    # Add method to open URLs
+    def open_url(self, url):
+        import webbrowser
+        webbrowser.open(url)
+
+    def open_link(self, url):
+        """Open the given URL in the default web browser"""
+        import webbrowser
+        webbrowser.open(url)
 
     def upload_image(self, event=None):
         file_path = filedialog.askopenfilename(
